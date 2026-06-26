@@ -62,8 +62,6 @@ def test_project_quick_create_styles_exist_and_are_discrete_to_pointer_layouts()
 
 
 def _run_new_session_case(options, active_project=None):
-    src = _read(SESSIONS_JS)
-
     _DRIVER = r"""
 const fs = require('fs');
 const path = process.argv[1];
