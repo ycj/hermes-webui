@@ -1218,6 +1218,9 @@ function openInBrowser(){
 
 async function copyPreviewFilePath(){
   if(!_previewCurrentPath||!S.session) return;
+  const btn=$('btnCopyPreviewPath');
+  if(btn&&btn.disabled) return;
+  if(btn) btn.disabled=true;
   try{
     const r=await api('/api/file/path',{method:'POST',body:JSON.stringify({session_id:S.session.session_id,path:_previewCurrentPath})});
     const abs=(r&&r.path)||_previewCurrentPath;
@@ -1242,6 +1245,8 @@ async function copyPreviewFilePath(){
     }
   }catch(err){
     showToast(t('path_copy_failed')+(err.message||err));
+  }finally{
+    if(btn) btn.disabled=false;
   }
 }
 

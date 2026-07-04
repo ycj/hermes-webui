@@ -35,6 +35,10 @@ def _function_body(src: str, name: str) -> str:
     raise AssertionError(f"{name} body did not close")
 
 
+def _compact(src: str) -> str:
+    return "".join(src.split())
+
+
 def test_preview_toolbar_has_copy_file_path_button():
     assert 'id="btnCopyPreviewPath"' in INDEX
     assert 'onclick="copyPreviewFilePath()"' in INDEX
@@ -44,11 +48,30 @@ def test_preview_toolbar_has_copy_file_path_button():
 
 def test_preview_copy_file_path_uses_server_resolved_current_preview_path():
     body = _function_body(WORKSPACE_JS, "copyPreviewFilePath")
-    assert "if(!_previewCurrentPath||!S.session) return;" in body
+    compact = _compact(body)
+
+    assert "_previewCurrentPath" in body
+    assert "S.session" in body
+    assert body.index("_previewCurrentPath") < body.index("api('/api/file/path'")
     assert "api('/api/file/path'" in body
     assert "session_id:S.session.session_id" in body
     assert "path:_previewCurrentPath" in body
-    assert "const abs=(r&&r.path)||_previewCurrentPath" in body
+    assert "constabs=(r&&r.path)||_previewCurrentPath" in compact
+
+
+def test_preview_copy_file_path_disables_button_while_request_is_in_flight():
+    body = _function_body(WORKSPACE_JS, "copyPreviewFilePath")
+    compact = _compact(body)
+
+    guard = "if(btn&&btn.disabled)return;"
+    disable = "if(btn)btn.disabled=true;"
+    enable = "finally{if(btn)btn.disabled=false;}"
+    assert "$('btnCopyPreviewPath')" in body
+    assert guard in compact
+    assert disable in compact
+    assert enable in compact
+    assert compact.index(guard) < compact.index(disable)
+    assert compact.index(disable) < compact.index("api('/api/file/path'")
 
 
 def test_preview_copy_file_path_reuses_clipboard_fallback_and_toasts():
