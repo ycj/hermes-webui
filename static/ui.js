@@ -12808,6 +12808,22 @@ function _restoreMessageScrollSnapshotSameFrame(snapshot){
   if(!restoredViaAnchor){
     const maxTop=Math.max(0,el.scrollHeight-el.clientHeight);
     const bottom=Number(snapshot.bottom);
+    // #5637: when the reader has scrolled UP into history (userUnpinned) and the
+    // semantic anchor restore failed, do NOT snap scrollTop to the captured
+    // ABSOLUTE snapshot.top. During streaming, the live activity-scene refresh
+    // fires this every tick; above-viewport height keeps changing, so the old
+    // absolute top no longer maps to the same content and the viewport is nudged
+    // backward by an amount that grows with scrollHeight. Leaving scrollTop
+    // untouched lets the browser's own scroll anchoring hold the reader's
+    // position. Pinned / near-bottom readers still get the tail-relative restore
+    // below (that path is correct and must run).
+    if(snapshot.userUnpinned===true&&snapshot.pinned!==true){
+      _lastScrollTop=el.scrollTop;_lastMessageClientHeight=el.clientHeight;
+      _messageUserUnpinned=true;
+      _scrollPinned=false;
+      _nearBottomCount=0;
+      return;
+    }
     const target=(snapshot.pinned===true&&Number.isFinite(bottom))
       ? maxTop-Math.max(0,bottom)
       : Number(snapshot.top)||0;
