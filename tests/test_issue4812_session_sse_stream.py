@@ -163,6 +163,38 @@ def test_session_journal_distinguishes_missing_and_foreign_cursor(tmp_path):
     assert foreign["status"] == "cursor_session_mismatch"
 
 
+def test_session_journal_rejects_hostile_cursor_without_replay(tmp_path, monkeypatch):
+    append_run_event(
+        "session_1",
+        "run_a",
+        "token",
+        {"text": "a1"},
+        session_dir=tmp_path,
+        seq=1,
+        created_at=100.0,
+    )
+    monkeypatch.setattr(
+        "api.run_journal.find_run_summary",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("invalid cursor should not scan summaries")),
+    )
+
+    malformed = read_session_run_events("session_1", after_event_id="bad/run:1", session_dir=tmp_path)
+    negative = read_session_run_events("session_1", after_event_id="run_a:-5", session_dir=tmp_path)
+
+    assert malformed["status"] == "cursor_invalid"
+    assert malformed["events"] == []
+    assert negative["status"] == "cursor_invalid"
+    assert negative["events"] == []
+
+
+def test_session_journal_blank_summary_session_stays_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr("api.run_journal.find_run_summary", lambda *_args, **_kwargs: {"session_id": ""})
+
+    replay = read_session_run_events("session_1", after_event_id="run_missing:1", session_dir=tmp_path)
+
+    assert replay["status"] == "cursor_run_missing"
+
+
 def test_session_route_prefers_last_event_id_then_query_fallback(monkeypatch):
     import api.routes as routes
 

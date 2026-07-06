@@ -337,6 +337,17 @@ def read_session_run_events(
     sid = _validate_id(session_id, "session_id")
     cursor_run_id, cursor_seq = _parse_run_journal_event_id(after_event_id)
     raw_cursor = str(after_event_id or "").strip()
+    if raw_cursor and cursor_run_id is not None:
+        try:
+            cursor_run_id = _validate_id(cursor_run_id, "run_id")
+        except ValueError:
+            cursor_seq = None
+    if raw_cursor:
+        try:
+            if int(raw_cursor.rsplit(":", 1)[-1]) < 0:
+                cursor_seq = None
+        except (TypeError, ValueError):
+            pass
     if raw_cursor and (cursor_run_id is None or cursor_seq is None):
         return {
             "session_id": sid,
@@ -360,7 +371,8 @@ def read_session_run_events(
     if cursor_entry is None:
         summary = find_run_summary(cursor_run_id or "", session_dir=session_dir) if cursor_run_id else None
         status = "cursor_run_missing"
-        if summary and str(summary.get("session_id") or "") != sid:
+        summary_sid = str(summary.get("session_id") or "").strip() if summary else ""
+        if summary_sid and summary_sid != sid:
             status = "cursor_session_mismatch"
         return {
             "session_id": sid,
