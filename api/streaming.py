@@ -6795,10 +6795,10 @@ def _run_agent_streaming(
     # Initialised here (before any code that may raise) so the outer `finally`
     # block can safely check `if _checkpoint_stop is not None` even when an
     # exception fires before the checkpoint thread is created (Issue #765).
-    _checkpoint_stop = None
     _ckpt_thread = None
     _agent_lock = None
     _turn_pending_source = 'webui'
+    _checkpoint_stop = None
     try:
         # Bind THIS turn's session identity to the worker thread/context BEFORE
         # any agent work (so every mid-turn notify_on_complete background spawn
