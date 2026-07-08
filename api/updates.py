@@ -327,10 +327,12 @@ def apply_clear_lock(target: str) -> dict:
         if not inv['well_known_lock_present']:
             # Lock is gone. Run the normal non-destructive update flow and
             # annotate the response with what we found for the user's
-            # records.
+            # records. Pass the configured channel through — otherwise an
+            # experimental-channel WebUI lock-recovery retry silently falls back
+            # to stable (Codex gate: _apply_update_inner defaults to stable).
             with _cache_lock:
                 _update_cache['checked_at'] = 0
-            retry_result = _apply_update_inner(target)
+            retry_result = _apply_update_inner(target, _read_update_channel())
             retry_result = dict(retry_result)
             retry_result['lock_recovery'] = {
                 'action': 'no-lock-found',

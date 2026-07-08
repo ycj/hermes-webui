@@ -249,3 +249,40 @@ def test_update_cache_scoped_by_channel(channel_repo, monkeypatch):
     # Both channels triggered a real check (no stale cross-channel cache hit).
     assert ('webui', 'stable') in calls
     assert ('webui', 'experimental') in calls
+
+
+# ── Lock-recovery preserves the channel (Codex round-2 SILENT) ───────────────
+
+def test_clear_lock_retry_preserves_experimental_channel(tmp_path, monkeypatch):
+    """apply_clear_lock re-runs the normal update once the lock is gone. It must
+    pass the configured channel through — otherwise an experimental WebUI
+    lock-recovery retry silently falls back to stable (_apply_update_inner
+    defaults to stable)."""
+    (tmp_path / '.git').mkdir()
+    monkeypatch.setattr(updates, 'REPO_ROOT', tmp_path)
+    monkeypatch.setattr(
+        updates, '_restart_blocker_snapshot',
+        lambda: {'restart_blocked': False, 'active_streams': 0, 'active_runs': 0},
+    )
+    # No lock present → clear-lock takes the "re-run normal update" branch.
+    monkeypatch.setattr(
+        updates, '_inventory_locks',
+        lambda path: {'well_known_lock_present': False,
+                      'well_known_lock_path': str(tmp_path / '.git/index.lock'),
+                      'other_locks': []},
+    )
+    # User's configured channel is experimental.
+    monkeypatch.setattr(updates, '_read_update_channel', lambda: 'experimental')
+    seen = {}
+
+    def fake_inner(target, channel='stable'):
+        seen['channel'] = channel
+        return {'ok': True, 'target': target, 'channel': channel}
+
+    monkeypatch.setattr(updates, '_apply_update_inner', fake_inner)
+    result = updates.apply_clear_lock('webui')
+    assert seen.get('channel') == 'experimental', (
+        'clear-lock retry must preserve the experimental channel, not default to stable'
+    )
+    assert result['ok'] is True
+    assert result['lock_recovery']['action'] == 'no-lock-found'
