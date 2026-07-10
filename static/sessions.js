@@ -1425,7 +1425,7 @@ async function loadSession(sid){
   // #2971: idempotent re-arm before the no-op guard revives a stream a prior
   // failed loadSession killed; no-ops on real switches.
   _rearmActiveSessionStream();
-  if(currentSid===sid && !forceReload && !_loadingSessionId) return;
+  if(currentSid===sid && !forceReload && (!_loadingSessionId || _loadingSessionId===sid)) return;
   // Mark this session as the in-flight load. Subsequent loadSession() calls
   // will overwrite this; stale awaits use the mismatch to bail out (#1060).
   const _loadGeneration = ++_loadSessionGeneration;
@@ -2778,7 +2778,7 @@ async function _ensureMessagesLoaded(sid, opts) {
       {timeoutMs:120000}
     );
   } finally {
-    _clearSameSessionForceReloadHint(sid);
+    if (_ownsLoad()) _clearSameSessionForceReloadHint(sid);
   }
   if (!_ownsLoad()) return;
   // Guard: api() may have redirected (401) and returned undefined.
