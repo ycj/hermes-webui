@@ -3246,7 +3246,9 @@ def _filter_reasoning_efforts_for_provider(
     normalized = list(dict.fromkeys(normalized))
     provider = _resolve_provider_alias(str(provider_id or "").strip().lower())
     bare = _strip_provider_hint_for_reasoning(model_id).lower().rsplit("/", 1)[-1]
-    if provider == "openai-codex":
+    # OpenAI-family lanes (Codex, direct OpenAI, Azure Foundry) cap GPT-5 at xhigh
+    # and o-series at high — 'max' is a WebUI-only level none of them accept.
+    if provider in {"openai-codex", "openai", "openai-api", "azure-foundry", "azure-openai", "azure"}:
         if bare.startswith(("o1", "o3", "o4")):
             return [eff for eff in normalized if eff in {"low", "medium", "high"}]
         if bare.startswith("gpt-5"):
@@ -3258,7 +3260,14 @@ def _filter_reasoning_efforts_for_provider(
     # Dropping 'max' here lets the existing downgrade ladder land on xhigh/high.
     if provider in {"gemini", "google", "google-gemini", "google-vertex", "vertex"}:
         return [eff for eff in normalized if eff != "max"]
-    if provider in {"anthropic", "claude", "anthropic-claude"} and _is_pre_adaptive_anthropic(bare):
+    # Legacy Claude is pre-adaptive whether served natively OR via Azure Foundry /
+    # Bedrock / Vertex — the ceiling follows the MODEL, not just the provider name.
+    _anthropic_lanes = {
+        "anthropic", "claude", "anthropic-claude",
+        "azure-foundry", "azure-openai", "azure", "bedrock", "aws-bedrock",
+        "vertex", "google-vertex",
+    }
+    if provider in _anthropic_lanes and "claude" in bare and _is_pre_adaptive_anthropic(bare):
         return [eff for eff in normalized if eff != "max"]
     return normalized
 

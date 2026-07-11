@@ -362,3 +362,28 @@ def test_max_effort_preserved_for_adaptive_anthropic_and_deepseek():
     assert cfg.coerce_reasoning_effort_for_model(
         "max", model_id="deepseek-reasoner", provider_id="deepseek"
     ) == "max"
+
+
+def test_max_degrades_across_all_openai_family_lanes():
+    # 'max' is WebUI-only; direct OpenAI, openai-api, and Azure Foundry GPT-5 all
+    # cap at xhigh (o-series at high), not just openai-codex. (#4627 re-gate)
+    for prov in ("openai", "openai-api", "azure-foundry", "openai-codex"):
+        assert cfg.coerce_reasoning_effort_for_model(
+            "max", model_id="gpt-5.1", provider_id=prov
+        ) == "xhigh", f"gpt-5 on {prov} must degrade max->xhigh"
+        assert cfg.coerce_reasoning_effort_for_model(
+            "max", model_id="o3", provider_id=prov
+        ) == "high", f"o-series on {prov} must degrade max->high"
+
+
+def test_max_degrades_for_azure_bedrock_hosted_legacy_claude():
+    # Legacy Claude via Azure Foundry / Bedrock is still pre-adaptive; the ceiling
+    # follows the model, not just the provider name. (#4627 re-gate)
+    for prov in ("azure-foundry", "bedrock"):
+        assert cfg.coerce_reasoning_effort_for_model(
+            "max", model_id="claude-sonnet-4-20250514", provider_id=prov
+        ) == "xhigh", f"legacy Claude on {prov} must degrade max->xhigh"
+    # adaptive Claude via azure preserves max
+    assert cfg.coerce_reasoning_effort_for_model(
+        "max", model_id="claude-opus-4.6", provider_id="azure-foundry"
+    ) == "max"
