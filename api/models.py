@@ -805,6 +805,28 @@ def _clear_webui_deleted_session_tombstone(sid: str) -> None:
             logger.debug("Failed to remove empty webui deleted-session tombstone", exc_info=True)
 
 
+def _content_has_reasoning_only_parts(content) -> bool:
+    if not isinstance(content, list) or not content:
+        return False
+    saw_reasoning = False
+    for part in content:
+        if not isinstance(part, dict):
+            if str(part or '').strip():
+                return False
+            continue
+        part_type = str(part.get('type') or '').lower()
+        if part_type in {'thinking', 'reasoning'}:
+            text = part.get('thinking') or part.get('reasoning') or part.get('text') or ''
+            if str(text).strip():
+                saw_reasoning = True
+            continue
+        if part_type == 'text' and str(part.get('text') or part.get('content') or '').strip():
+            return False
+        if part_type not in {'text', 'thinking', 'reasoning'}:
+            return False
+    return saw_reasoning
+
+
 def _active_stream_ids():
     with STREAMS_LOCK:
         active_ids = set(STREAMS.keys())
@@ -825,6 +847,8 @@ def _recovered_model_context_projection(message: dict) -> dict | None:
     projected = dict(message)
     projected.pop('reasoning', None)
     if projected.get('_error'):
+        return None
+    if _content_has_reasoning_only_parts(projected.get('content')):
         return None
     projected_text = _normalize_journal_recovery_text(projected.get('content'))
     if not projected_text and not projected.get('tool_call_id') and not projected.get('tool_calls'):
@@ -862,7 +886,7 @@ def _seed_recovered_context_from_messages(session, context_messages: list) -> No
         projected = _recovered_model_context_projection(message)
         if projected is None:
             continue
-        _append_recovered_context_projection(session, context_messages, projected)
+        context_messages.append(projected)
 
 
 def _append_recovered_turn_to_context(session, recovered: dict) -> None:

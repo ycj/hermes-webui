@@ -372,6 +372,98 @@ def test_empty_context_recovery_seeds_reasoning_free_model_context():
     assert next_turn_context == session.context_messages
 
 
+def test_empty_context_recovery_omits_structured_reasoning_only_content(tmp_path):
+    session_id = "issue3929_empty_context_structured_reasoning"
+    stream_id = "stream_empty_context_structured_reasoning"
+    session = Session(
+        session_id=session_id,
+        title="Structured reasoning-only content",
+        messages=[
+            {"role": "user", "content": "Continue", "timestamp": 1234},
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "reasoning",
+                        "reasoning": "Structured Thinking must stay display-only.",
+                    },
+                ],
+            },
+        ],
+        context_messages=[],
+    )
+    append_run_event(
+        session_id,
+        stream_id,
+        "token",
+        {"text": "Recovered visible answer."},
+    )
+
+    assert _append_journaled_partial_output(
+        session, stream_id, dedupe_existing=True,
+    ) is True
+    session.save()
+
+    models.SESSIONS.clear()
+    reloaded = models.get_session(session_id)
+    context_projection = [
+        (message.get("role"), message.get("content"))
+        for message in reloaded.context_messages
+    ]
+    assert context_projection == [
+        ("user", "Continue"),
+        ("assistant", "Recovered visible answer."),
+    ]
+    serialized_context = json.dumps(
+        reloaded.context_messages, ensure_ascii=False,
+    )
+    assert "Structured Thinking" not in serialized_context
+    sanitized = _sanitize_messages_for_api(reloaded.context_messages)
+    assert [
+        (message.get("role"), message.get("content"))
+        for message in sanitized
+    ] == [
+        ("user", "Continue"),
+        ("assistant", "Recovered visible answer."),
+    ]
+
+
+def test_empty_context_recovery_preserves_duplicate_historical_replies():
+    session_id = "issue3929_empty_context_duplicate_history"
+    stream_id = "stream_empty_context_duplicate_history"
+    session = Session(
+        session_id=session_id,
+        title="Duplicate historical replies",
+        messages=[
+            {"role": "user", "content": "First check"},
+            {"role": "assistant", "content": "Same status."},
+            {"role": "user", "content": "Second check"},
+            {"role": "assistant", "content": "Same status."},
+        ],
+        context_messages=[],
+    )
+    append_run_event(
+        session_id,
+        stream_id,
+        "reasoning",
+        {"text": "Display-only Thinking should not affect history shape."},
+    )
+
+    assert _append_journaled_partial_output(
+        session, stream_id, dedupe_existing=True,
+    ) is True
+
+    assert [
+        (message.get("role"), message.get("content"))
+        for message in session.context_messages
+    ] == [
+        ("user", "First check"),
+        ("assistant", "Same status."),
+        ("user", "Second check"),
+        ("assistant", "Same status."),
+    ]
+
+
 def test_reasoning_backfill_accepts_core_row_before_recovered_owner_echo():
     session_id = "issue3929_reasoning_core_owner_echo"
     stream_id = "stream_reasoning_core_owner_echo"
